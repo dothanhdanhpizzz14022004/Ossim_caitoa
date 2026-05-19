@@ -89,10 +89,11 @@ struct pcb_t * get_mlq_proc(void) {
         remaining_slot = slot[current_prio];
     }
 
-    pthread_mutex_unlock(&queue_lock);
+
 
 	if (proc != NULL)
-		enqueue(&running_list, proc);
+        enqueue(&running_list, proc);
+    pthread_mutex_unlock(&queue_lock);
 	return proc;
 }
 
