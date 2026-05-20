@@ -61,24 +61,24 @@ static void * cpu_routine(void * args) {
 		 	* ready queue */
 			proc = get_proc();
 			if (proc == NULL) {
-                           next_slot(timer_id);
-                           continue; /* First load failed. skip dummy load */
-                        }
+                next_slot(timer_id);
+                continue; /* First load failed. skip dummy load */
+            }
 		}else if (proc->pc == proc->code->size) {
 			/* The porcess has finish it job */
 			printf("\tCPU %d: Processed %2d has finished\n",
-				id ,proc->pid);
+                   id ,proc->pid);
 			free(proc);
 			proc = get_proc();
 			time_left = 0;
 		}else if (time_left == 0) {
 			/* The process has done its job in current time slot */
 			printf("\tCPU %d: Put process %2d to run queue\n",
-				id, proc->pid);
+                   id, proc->pid);
 			put_proc(proc);
 			proc = get_proc();
 		}
-		
+
 		/* Recheck process status after loading new process */
 		if (proc == NULL && done) {
 			/* No process to run, exit */
@@ -94,12 +94,12 @@ static void * cpu_routine(void * args) {
 				id, proc->pid);
 			time_left = time_slot;
 		}
-		
+
 		/* Run current process */
 		run(proc);
 		time_left--;
 		next_slot(timer_id);
-	}
+	} /* while (1) */
 	detach_event(timer_id);
 	pthread_exit(NULL);
 }
@@ -137,7 +137,7 @@ static void * ld_routine(void * args) {
 	printf("ld_routine\n");
 	while (i < num_processes) {
 		struct pcb_t * proc = load(ld_processes.path[i]);
-		struct krnl_t * krnl = proc->krnl = &os;	
+		struct krnl_t * krnl = proc->krnl = &os;
 
 #ifdef MLQ_SCHED
 		proc->prio = ld_processes.prio[i];
@@ -153,12 +153,12 @@ static void * ld_routine(void * args) {
 		krnl->active_mswp = active_mswp;
 #endif
 		printf("\tLoaded a process at %s, PID: %d PRIO: %ld\n",
-			ld_processes.path[i], proc->pid, ld_processes.prio[i]);
+               ld_processes.path[i], proc->pid, ld_processes.prio[i]);
 		add_proc(proc);
 		free(ld_processes.path[i]);
 		i++;
 		next_slot(timer_id);
-	}
+	} /*  end while (i < num_processes)  */
 	free(ld_processes.path);
 	free(ld_processes.start_time);
 	done = 1;
@@ -181,7 +181,7 @@ static void read_config(const char * path) {
 #ifdef MM_FIXED_MEMSZ
 	/* We provide here a back compatible with legacy OS simulatiom config file
          * In which, it have no addition config line for Mema, keep only one line
-	 * for legacy info 
+	 * for legacy info
          *  [time slice] [N = Number of CPU] [M = Number of Processes to be run]
          */
         memramsz  =  0x100000000;
@@ -195,11 +195,11 @@ static void read_config(const char * path) {
 	*/
 	fscanf(file, FORMAT_ARG "\n", &memramsz);
 	for(sit = 0; sit < PAGING_MAX_MMSWP; sit++)
-		fscanf(file, FORMAT_ARG, &(memswpsz[sit])); 
+		fscanf(file, FORMAT_ARG, &(memswpsz[sit]));
 
        fscanf(file, "\n"); /* Final character */
-#endif
-#endif
+#endif /* NOT MM_FIXED_MEMSZ */
+#endif /* MM_PAGING */
 
 #ifdef MLQ_SCHED
 	ld_processes.prio = (unsigned long*)
@@ -236,7 +236,7 @@ int main(int argc, char * argv[]) {
 	struct cpu_args * args =
 		(struct cpu_args*)malloc(sizeof(struct cpu_args) * num_cpus);
 	pthread_t ld;
-	
+
 	/* Init timer */
 	int i;
 	for (i = 0; i < num_cpus; i++) {
@@ -256,7 +256,7 @@ int main(int argc, char * argv[]) {
 	/* Create MEM RAM */
 	init_memphy(&mram, memramsz, rdmflag);
 
-        /* Create all MEM SWAP */ 
+        /* Create all MEM SWAP */
 	int sit;
 	for(sit = 0; sit < PAGING_MAX_MMSWP; sit++)
 	       init_memphy(&mswp[sit], memswpsz[sit], rdmflag);
@@ -268,7 +268,7 @@ int main(int argc, char * argv[]) {
 	mm_ld_args->mram = (struct memphy_struct *) &mram;
 	mm_ld_args->mswp = (struct memphy_struct**) &mswp;
 	mm_ld_args->active_mswp = (struct memphy_struct *) &mswp[0];
-        mm_ld_args->active_mswp_id = 0;
+    mm_ld_args->active_mswp_id = 0;
 
 
 #endif
@@ -299,6 +299,3 @@ int main(int argc, char * argv[]) {
 	return 0;
 
 }
-
-
-
