@@ -170,8 +170,9 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *retfpn)
 
 int MEMPHY_dump(struct memphy_struct *mp)
 {
-  if (mp == NULL || mp->storage == NULL)
+   if (mp == NULL || mp->storage == NULL)
       return -1;
+
    return 0;
 }
 
