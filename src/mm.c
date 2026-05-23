@@ -227,6 +227,7 @@ int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
 int init_mm(struct mm_struct *mm, struct pcb_t *caller)
 {
   if (mm == NULL || caller == NULL)
+<<<<<<< HEAD
     return -1;
 
   memset(mm, 0, sizeof(struct mm_struct));
@@ -284,6 +285,27 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
   printf("DEBUG init_mm pid=%u mm=%p mmap=%p vma0=%p\n",
          caller->pid, (void*)mm, (void*)mm->mmap, (void*)vma0);
 
+=======
+        return -1;
+  mm->pgd = (uint32_t *)malloc(PAGING_MAX_PGN * sizeof(uint32_t));
+    if (mm->pgd == NULL)
+        return -1;
+  for (int i = 0; i < PAGING_MAX_PGN; i++) {
+        mm->pgd[i] = 0;
+    }
+  mm->mmap = NULL;
+  for (int i = 0; i < PAGING_MAX_SYMTBL_SZ; i++) {
+        mm->symrgtbl[i].rg_start = 0;
+        mm->symrgtbl[i].rg_end = 0;
+        mm->symrgtbl[i].rg_next = NULL;
+    }
+
+    mm->fifo_pgn = NULL;
+    caller->mm = mm;
+  
+
+  //printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+>>>>>>> ea88219 (f)
   return 0;
 }
 

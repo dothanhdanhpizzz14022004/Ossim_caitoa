@@ -151,6 +151,7 @@ if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
     return -1;
   }
 
+<<<<<<< HEAD
 #ifdef MM64
   addr_t aligned_sz = PAGING64_PAGE_ALIGNSZ(inc_sz);
   addr_t pagesz = PAGING64_PAGESZ;
@@ -158,6 +159,17 @@ if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
   addr_t aligned_sz = PAGING_PAGE_ALIGNSZ(inc_sz);
   addr_t pagesz = PAGING_PAGESZ;
 #endif
+=======
+  /* TODO: Obtain the new vm area based on vmaid */
+  cur_vma->vm_end = new_end;
+  cur_vma->sbrk = new_end;
+  printf("[MM-VM] Increased vma %d limit: 0x%lx -> 0x%lx (size +%lu)\n", 
+         vmaid, old_end, new_end, (unsigned long)inc_sz);
+  
+  // inc_limit_ret...
+  /* The obtained vm area (only)
+   * now will be alloc real ram region */
+>>>>>>> ea88219 (f)
 
   int incpgnum = aligned_sz / pagesz;
 

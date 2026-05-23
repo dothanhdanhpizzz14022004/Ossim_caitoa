@@ -2,6 +2,7 @@
 #include "syscall.h"
 #include <stdio.h>
 
+<<<<<<< HEAD
 int __sys_hellohandler(struct krnl_t *krnl, uint32_t pid, struct sc_regs *regs)
 {
     //printf("[SYSCALL] Hello world!\n");
@@ -11,3 +12,17 @@ int __sys_hellohandler(struct krnl_t *krnl, uint32_t pid, struct sc_regs *regs)
 
     return 0;
 }
+=======
+int __sys_hellohandler(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
+{
+    printf("[SYSCALL] Hello world!\n");
+
+    if (regs != NULL) {
+        printf("[SYSCALL] Parameter a1 = %lu\n", regs->a1);
+        printf("[SYSCALL] Parameter a2 = %lu\n", regs->a2);
+        printf("[SYSCALL] Parameter a3 = %lu\n", regs->a3);
+    }
+
+    return 0;
+}
+>>>>>>> ea88219 (f)
