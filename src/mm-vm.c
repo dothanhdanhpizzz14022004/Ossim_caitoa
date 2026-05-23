@@ -16,6 +16,7 @@
 
 #include "string.h"
 #include "mm.h"
+#include "mm64.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
@@ -27,23 +28,20 @@
  */
 struct vm_area_struct *get_vma_by_num(struct mm_struct *mm, int vmaid)
 {
-  struct vm_area_struct *pvma = mm->mmap;
-
-  if (mm->mmap == NULL)
+    if (mm == NULL || mm->mmap == NULL)
     return NULL;
 
-  int vmait = pvma->vm_id;
+  struct vm_area_struct *pvma = mm->mmap;
 
-  while (vmait < vmaid)
+  while (pvma != NULL)
   {
-    if (pvma == NULL)
-      return NULL;
+    if ((int)pvma->vm_id == vmaid)
+      return pvma;
 
     pvma = pvma->vm_next;
-    vmait = pvma->vm_id;
   }
 
-  return pvma;
+  return NULL;
 }
 
 int __mm_swap_page(struct pcb_t *caller, addr_t vicfpn , addr_t swpfpn)
@@ -79,14 +77,12 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, ad
   }
 
   /* TODO: update the newrg boundary*/
-   newrg->rg_start = cur_vma->sbrk;
-   newrg->rg_end = newrg->rg_start + size;
-   newrg->rg_next = NULL;
-   
-   cur_vma->sbrk = newrg->rg_end;
-   printf("[MM-VM] Allocated new region in vma %d: [0x%lx - 0x%lx]\n", 
-           vmaid, newrg->rg_start, newrg->rg_end);
-  
+  newrg->rg_start = cur_vma->sbrk;
+  newrg->rg_end = newrg->rg_start + size;
+  newrg->rg_next = NULL;
+
+  printf("[MM-VM] New region in vma %d: [0x%lx - 0x%lx]\n",vmaid,(unsigned long)newrg->rg_start,(unsigned long)newrg->rg_end);
+
   return newrg;
 }
 
@@ -100,6 +96,8 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, ad
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, addr_t vmaend)
 {
   //struct vm_area_struct *vma = caller->krnl->mm->mmap;
+  if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
+    return -1;
 
   /* TODO validate the planned memory area is not overlapped */
   if (vmastart >= vmaend)
@@ -123,7 +121,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
 
   while (vma != NULL)
   {
-    if (vma != cur_area && OVERLAP(vm_start, vm_end, vma->vm_start, vma->vm_end))
+    if (vma != cur_area && OVERLAP(vmastart, vmaend, vma->vm_start, vma->vm_end))
     {
       return -1;
     }
@@ -142,39 +140,59 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
  */
 int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
 {
-  //struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
+if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
+    return -1;
 
-  /* TOTO with new address scheme, the size need tobe aligned 
-   *      the raw inc_sz maybe not fit pagesize
-   */ 
-  //addr_t inc_amt;
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
 
-//  int incnumpage =  inc_amt / PAGING_PAGESZ;
-
-   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
-  if (cur_vma == NULL) {
-      printf("Cannot find vma %d\n", vmaid);
-      return -1;
+  if (cur_vma == NULL)
+  {
+    printf("Cannot find vma %d\n", vmaid);
+    return -1;
   }
-  addr_t old_end = cur_vma->vm_end;
-  addr_t new_end = cur_vma->sbrk + inc_sz;
-  /* TODO Validate overlap of obtained region */
-  if (validate_overlap_vm_area(caller, vmaid, cur_vma->sbrk, new_end) < 0)
-    return -1; /*Overlap and failed allocation */
-  
 
-  /* TODO: Obtain the new vm area based on vmaid */
-  cur_vma->vm_end = new_end;
-  printf("[MM-VM] Increased vma %d limit: 0x%lx -> 0x%lx (size +%lu)\n", 
-         vmaid, old_end, new_end, (unsigned long)inc_sz);
-  
-  // inc_limit_ret...
-  /* The obtained vm area (only)
-   * now will be alloc real ram region */
+#ifdef MM64
+  addr_t aligned_sz = PAGING64_PAGE_ALIGNSZ(inc_sz);
+  addr_t pagesz = PAGING64_PAGESZ;
+#else
+  addr_t aligned_sz = PAGING_PAGE_ALIGNSZ(inc_sz);
+  addr_t pagesz = PAGING_PAGESZ;
+#endif
 
-//  if (vm_map_ram(caller, area->rg_start, area->rg_end, 
-//                   old_end, incnumpage , newrg) < 0)
-//    return -1; /* Map the memory to MEMRAM */
+  int incpgnum = aligned_sz / pagesz;
+
+  addr_t old_sbrk = cur_vma->sbrk;
+  addr_t new_sbrk = old_sbrk + aligned_sz;
+
+  if (validate_overlap_vm_area(caller, vmaid, old_sbrk, new_sbrk) < 0)
+    return -1;
+
+  for (int i = 0; i < incpgnum; i++)
+  {
+    addr_t vaddr = old_sbrk + i * pagesz;
+
+#ifdef MM64
+    addr_t pgn = vaddr / PAGING64_PAGESZ;
+#else
+    addr_t pgn = PAGING_PGN(vaddr);
+#endif
+
+    addr_t fpn;
+
+    if (MEMPHY_get_freefp(caller->krnl->mram, &fpn) != 0)
+      return -1;
+
+    pte_set_fpn(caller, pgn, fpn);
+    enlist_pgn_node(&caller->krnl->mm->fifo_pgn, pgn);
+  }
+
+  cur_vma->sbrk = new_sbrk;
+
+  if (new_sbrk > cur_vma->vm_end)
+    cur_vma->vm_end = new_sbrk;
+
+  printf("[MM-VM] Increased vma %d limit: 0x%lx -> 0x%lx\n",
+         vmaid, (unsigned long)old_sbrk, (unsigned long)new_sbrk);
 
   return 0;
 }

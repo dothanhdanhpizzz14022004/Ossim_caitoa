@@ -16,6 +16,7 @@
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #if !defined(MM64)
 /*
@@ -225,7 +226,64 @@ int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
  */
 int init_mm(struct mm_struct *mm, struct pcb_t *caller)
 {
-  printf("[ERROR] %s: This feature 32 bit mode is deprecated\n", __func__);
+  if (mm == NULL || caller == NULL)
+    return -1;
+
+  memset(mm, 0, sizeof(struct mm_struct));
+
+  struct vm_area_struct *vma0 = malloc(sizeof(struct vm_area_struct));
+  if (vma0 == NULL)
+    return -1;
+
+#ifdef MM64
+  mm->pgd = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->p4d = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->pud = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->pmd = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->pt  = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+
+  if (mm->pgd == NULL || mm->p4d == NULL || mm->pud == NULL ||
+      mm->pmd == NULL || mm->pt == NULL)
+    return -1;
+
+  memset(mm->pgd, 0, PAGING64_MAX_PGN * sizeof(addr_t));
+  memset(mm->p4d, 0, PAGING64_MAX_PGN * sizeof(addr_t));
+  memset(mm->pud, 0, PAGING64_MAX_PGN * sizeof(addr_t));
+  memset(mm->pmd, 0, PAGING64_MAX_PGN * sizeof(addr_t));
+  memset(mm->pt,  0, PAGING64_MAX_PGN * sizeof(addr_t));
+#else
+  mm->pgd = malloc(PAGING_MAX_PGN * sizeof(uint32_t));
+  if (mm->pgd == NULL)
+    return -1;
+
+  memset(mm->pgd, 0, PAGING_MAX_PGN * sizeof(uint32_t));
+#endif
+
+  vma0->vm_id = 0;
+  vma0->vm_start = 0;
+  vma0->vm_end = 0;
+  vma0->sbrk = 0;
+  vma0->vm_mm = mm;
+  vma0->vm_freerg_list = NULL;
+  vma0->vm_next = NULL;
+
+  mm->mmap = vma0;
+  mm->fifo_pgn = NULL;
+  mm->kcpooltbl = NULL;
+
+  for (int i = 0; i < PAGING_MAX_SYMTBL_SZ; i++)
+  {
+    mm->symrgtbl[i].vmaid = 0;
+    mm->symrgtbl[i].rg_start = 0;
+    mm->symrgtbl[i].rg_end = 0;
+    mm->symrgtbl[i].rg_next = NULL;
+  }
+
+  caller->krnl->mm = mm;
+
+  printf("DEBUG init_mm pid=%u mm=%p mmap=%p vma0=%p\n",
+         caller->pid, (void*)mm, (void*)mm->mmap, (void*)vma0);
+
   return 0;
 }
 
