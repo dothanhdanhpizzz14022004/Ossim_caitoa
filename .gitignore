@@ -1,0 +1,10 @@
+obj/
+os
+src/syscalltbl.lst
+output/*.output
+*.txt
+*.output
+core
+core.*
+*.swp
+dasd

@@ -371,6 +371,7 @@ int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
  * @mm:     self mm
  * @caller: mm owner
  */
+
 int init_mm(struct mm_struct *mm, struct pcb_t *caller)
 {
   if (mm == NULL || caller == NULL)
@@ -418,13 +419,11 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
     mm->symrgtbl[i].rg_next = NULL;
   }
 
-  caller->krnl->mm = mm;
-
-  printf("DEBUG init_mm64 pid=%u mm=%p mmap=%p vma0=%p\n",
-         caller->pid, (void*)mm, (void*)mm->mmap, (void*)vma0);
+  caller->mm = mm;
 
   return 0;
 }
+
 
 struct vm_rg_struct *init_vm_rg(addr_t rg_start, addr_t rg_end)
 {

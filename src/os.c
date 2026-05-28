@@ -146,8 +146,17 @@ static void * ld_routine(void * args) {
 			next_slot(timer_id);
 		}
 #ifdef MM_PAGING
-		krnl->mm = malloc(sizeof(struct mm_struct));
-		init_mm(krnl->mm, proc);
+		proc->mm = malloc(sizeof(struct mm_struct));
+		if (proc->mm == NULL) {
+			printf("Cannot allocate mm for process %u\n", proc->pid);
+			exit(1);
+		}
+
+		if (init_mm(proc->mm, proc) != 0) {
+			printf("Cannot init mm for process %u\n", proc->pid);
+			exit(1);
+		}
+
 		krnl->mram = mram;
 		krnl->mswp = mswp;
 		krnl->active_mswp = active_mswp;

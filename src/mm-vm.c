@@ -62,7 +62,7 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, ad
 {
   struct vm_rg_struct * newrg;
   /* TODO retrive current vma to obtain newrg, current comment out due to compiler redundant warning*/
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
   
   if (cur_vma == NULL){
   printf ("Cannot find vm_area with id = %d\n", vmaid);
@@ -95,8 +95,8 @@ struct vm_rg_struct *get_vm_area_node_at_brk(struct pcb_t *caller, int vmaid, ad
  */
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, addr_t vmaend)
 {
-  //struct vm_area_struct *vma = caller->krnl->mm->mmap;
-  if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
+  //struct vm_area_struct *vma = caller->mm->mmap;
+  if (caller == NULL || caller->krnl == NULL || caller->mm == NULL)
     return -1;
 
   /* TODO validate the planned memory area is not overlapped */
@@ -105,7 +105,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
     return -1;
   }
 
-  struct vm_area_struct *vma = caller->krnl->mm->mmap;
+  struct vm_area_struct *vma = caller->mm->mmap;
   if (vma == NULL)
   {
     return -1;
@@ -113,7 +113,7 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
 
   /* TODO validate the planned memory area is not overlapped */
 
-  struct vm_area_struct *cur_area = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_area_struct *cur_area = get_vma_by_num(caller->mm, vmaid);
   if (cur_area == NULL)
   {
     return -1;
@@ -140,10 +140,10 @@ int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, a
  */
 int inc_vma_limit(struct pcb_t *caller, int vmaid, addr_t inc_sz)
 {
-if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
+if (caller == NULL || caller->krnl == NULL || caller->mm == NULL)
     return -1;
 
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
   if (cur_vma == NULL)
   {
@@ -195,7 +195,7 @@ if (caller == NULL || caller->krnl == NULL || caller->krnl->mm == NULL)
       return -1;
 
     pte_set_fpn(caller, pgn, fpn);
-    enlist_pgn_node(&caller->krnl->mm->fifo_pgn, pgn);
+    enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
   cur_vma->sbrk = new_sbrk;

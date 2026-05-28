@@ -282,7 +282,6 @@ int init_mm(struct mm_struct *mm, struct pcb_t *caller)
 
   caller->krnl->mm = mm;
 
-  printf("DEBUG init_mm pid=%u mm=%p mmap=%p vma0=%p\n",
          caller->pid, (void*)mm, (void*)mm->mmap, (void*)vma0);
 
 =======
