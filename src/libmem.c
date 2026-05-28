@@ -267,9 +267,6 @@ int libfree(struct pcb_t *proc, uint32_t reg_index)
 {
   int val = __free(proc, 0, reg_index);
 
-  printf("%s:%d pid=%u rgid=%u ret=%d\n",
-         __func__, __LINE__, proc->pid, reg_index, val);
-
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1);
@@ -446,10 +443,6 @@ int libread(
   if (val == 0)
     *destination = (uint32_t)data;
 
-  printf("%s:%d pid=%u rgid=%u offset=%lu ret=%d data=%d\n",
-         __func__, __LINE__, proc->pid,
-         source, (unsigned long)offset, val, data);
-
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1);
@@ -510,10 +503,6 @@ int libwrite(
     addr_t offset)
 {
   int val = __write(proc, 0, destination, offset, data);
-
-  printf("%s:%d pid=%u data=%d rgid=%u offset=%lu ret=%d\n",
-         __func__, __LINE__, proc->pid,
-         data, destination, (unsigned long)offset, val);
 
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
