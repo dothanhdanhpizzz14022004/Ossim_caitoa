@@ -178,6 +178,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
 
   pthread_mutex_unlock(&mmvm_lock);
 
+  printf("liballoc:178\n");
   return 0;
 }
 /*__free - remove a region memory
@@ -231,6 +232,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 
   pthread_mutex_unlock(&mmvm_lock);
 
+  printf("libfree:218\n");
   return 0;
 }
 
@@ -240,13 +242,10 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
  *@size: allocated size
  *@reg_index: memory region ID (used to identify variable in symbole table)
  */
-
 int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
 {
   addr_t addr = 0;
   int val = __alloc(proc, 0, reg_index, size, &addr);
-
-  printf("liballoc:178\n");
 
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
@@ -257,7 +256,6 @@ int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
 
   return val;
 }
-
 
 /*libfree - PAGING-based free a region memory
  *@proc: Process executing the instruction
@@ -265,42 +263,18 @@ int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
  *@reg_index: memory region ID (used to identify variable in symbole table)
  */
 
-
-
-
-
 int libfree(struct pcb_t *proc, uint32_t reg_index)
 {
-  static int printed_free_rgid4 = 0;
-
   int val = __free(proc, 0, reg_index);
-
-  if (val == 0)
-  {
-    if (reg_index != 4)
-    {
-      printf("libfree:218\n");
-    }
-    else if (printed_free_rgid4 == 0)
-    {
-      printf("libfree:218\n");
-      printed_free_rgid4 = 1;
-    }
-  }
 
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
-  if (val == 0)
-    print_pgtbl(proc, 0, -1);
+  print_pgtbl(proc, 0, -1);
 #endif
 #endif
 
   return val;
 }
-
-
-
-
 /*pg_getpage - get the page in ram
  *@mm: memory region
  *@pagenum: PGN
@@ -457,24 +431,26 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
 }
 
 /*libread - PAGING-based read a region memory */
-
-
-
-int libread(struct pcb_t *proc, uint32_t source, addr_t offset, uint32_t *destination)
+int libread(
+    struct pcb_t *proc,
+    uint32_t source,
+    addr_t offset,
+    uint32_t* destination)
 {
   BYTE data = 0;
   int val = __read(proc, 0, source, offset, &data);
 
   if (val == 0)
-    *destination = data;
+    *destination = (uint32_t)data;
 
-  printf("libread:426\n");
+#ifdef IODUMP
+#ifdef PAGETBL_DUMP
+  print_pgtbl(proc, 0, -1);
+#endif
+#endif
 
   return val;
 }
-
-
-
 /*__write - write a region memory
  *@caller: caller
  *@vmaid: ID vm area to alloc memory region
@@ -520,33 +496,22 @@ int __write(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE value
   return ret;
 }
 /*libwrite - PAGING-based write a region memory */
-
-
-
-
-
-
-int libwrite(struct pcb_t *proc, BYTE data, uint32_t destination, addr_t offset)
+int libwrite(
+    struct pcb_t *proc,
+    BYTE data,
+    uint32_t destination,
+    addr_t offset)
 {
   int val = __write(proc, 0, destination, offset, data);
 
-  printf("libwrite:502\n");
-
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
-  if (!(val != 0 && destination == 3 && proc->pid == 4))
-    print_pgtbl(proc, 0, -1);
+  print_pgtbl(proc, 0, -1);
 #endif
 #endif
 
   return val;
 }
-
-
-
-
-
-
 
 
 /*libkmem_malloc- alloc region memory in kmem
