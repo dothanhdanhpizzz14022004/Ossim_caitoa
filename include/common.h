@@ -116,10 +116,6 @@ struct pcb_t
 	uint32_t prio;
 #endif
 	struct krnl_t *krnl;	
-
-#ifdef MM_PAGING
-struct mm_struct *mm;
-#endif
 	struct page_table_t *page_table; // Page table
 	uint32_t bp;			 // Break pointer
 };

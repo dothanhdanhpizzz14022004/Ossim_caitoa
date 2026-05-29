@@ -11,18 +11,16 @@ int empty(struct queue_t *q)
 
 void enqueue(struct queue_t *q, struct pcb_t *proc)
 {
-        if (q == NULL || proc == NULL)
-                return;
-
-        if (q->size >= MAX_QUEUE_SIZE)
-        {
-                printf("Queue overflow\n");
-                return;
-        }
-
+        /* TODO: put a new process to queue [q] */
+    if ( q->size + 1 <= MAX_QUEUE_SIZE ) {
         q->proc[q->size] = proc;
         q->size++;
+    }
+    else {
+        printf("MAX_QUEUE_SIZE exceed inside enqueue()");
+    }
 }
+
 struct pcb_t *dequeue(struct queue_t *q)
 {
     /* TODO: return a pcb whose prioprity is the highest
@@ -32,48 +30,21 @@ struct pcb_t *dequeue(struct queue_t *q)
     /* This is fifo so naturally, just rmove the first element
        and let the sched take care of the logic. */
 
-    if (q == NULL || q->size == 0)
-                return NULL;
+    if ( q->size == 0 ) { return NULL; }
 
-        struct pcb_t *ret = q->proc[0];
+    struct pcb_t *deque_proc = q->proc[0];
+    int i;
+    for (i = 0; i < q->size - 1; i++) {
+        q->proc[i] = q->proc[i + 1];
+    }
+    q->size--;
 
-        for (int i = 0; i < q->size - 1; i++)
-                q->proc[i] = q->proc[i + 1];
-
-        q->proc[q->size - 1] = NULL;
-        q->size--;
-
-        return ret;
+    return deque_proc;
 }
 
 struct pcb_t *purgequeue(struct queue_t *q, struct pcb_t *proc)
 {
         /* TODO: remove a specific item from queue
          * */
-        if (q == NULL || proc == NULL || q->size == 0)
-                return NULL;
-
-        int pos = -1;
-
-        for (int i = 0; i < q->size; i++)
-        {
-                if (q->proc[i] == proc)
-                {
-                        pos = i;
-                        break;
-                }
-        }
-
-        if (pos == -1)
-                return NULL;
-
-        struct pcb_t *ret = q->proc[pos];
-
-        for (int i = pos; i < q->size - 1; i++)
-                q->proc[i] = q->proc[i + 1];
-
-        q->proc[q->size - 1] = NULL;
-        q->size--;
-
-        return ret;
+        return NULL;
 }
