@@ -371,39 +371,54 @@ int __swap_cp_page(struct memphy_struct *mpsrc, addr_t srcfpn,
  * @mm:     self mm
  * @caller: mm owner
  */
+
 int init_mm(struct mm_struct *mm, struct pcb_t *caller)
 {
   struct vm_area_struct *vma0 = malloc(sizeof(struct vm_area_struct));
+  if (mm == NULL || vma0 == NULL)
+    return -1;
 
-  /* TODO init page table directory */
-   //mm->pgd = ...
-   //mm->p4d = ...
-   //mm->pud = ...
-   //mm->pmd = ...
-   //mm->pt = ...
+  mm->pgd = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->p4d = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->pud = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->pmd = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
+  mm->pt  = malloc(PAGING64_MAX_PGN * sizeof(addr_t));
 
+  if (mm->pgd == NULL || mm->p4d == NULL || mm->pud == NULL ||
+      mm->pmd == NULL || mm->pt == NULL)
+    return -1;
 
-  /* By default the owner comes with at least one vma */
+  for (int i = 0; i < PAGING64_MAX_PGN; i++)
+  {
+    mm->pgd[i] = (addr_t)mm->p4d;
+    mm->p4d[i] = (addr_t)mm->pud;
+    mm->pud[i] = (addr_t)mm->pmd;
+    mm->pmd[i] = (addr_t)mm->pt;
+    mm->pt[i] = 0;
+  }
+
   vma0->vm_id = 0;
   vma0->vm_start = 0;
-  vma0->vm_end = vma0->vm_start;
-  vma0->sbrk = vma0->vm_start;
-  struct vm_rg_struct *first_rg = init_vm_rg(vma0->vm_start, vma0->vm_end);
-  enlist_vm_rg_node(&vma0->vm_freerg_list, first_rg);
+  vma0->vm_end = 0;
+  vma0->sbrk = 0;
+  vma0->vm_mm = mm;
+  vma0->vm_freerg_list = NULL;
+  vma0->vm_next = NULL;
 
-  /* TODO update VMA0 next */
-  // vma0->next = ...
+  mm->mmap = vma0;
 
-  /* Point vma owner backward */
-  //vma0->vm_mm = mm; 
+  for (int i = 0; i < PAGING_MAX_SYMTBL_SZ; i++)
+  {
+    mm->symrgtbl[i].rg_start = 0;
+    mm->symrgtbl[i].rg_end = 0;
+    mm->symrgtbl[i].rg_next = NULL;
+  }
 
-  /* TODO: update mmap */
-  //mm->mmap = ...
-  //mm->symrgtbl = ...
-  //mm->kcpooltbl
+  mm->fifo_pgn = NULL;
 
   return 0;
 }
+
 
 struct vm_rg_struct *init_vm_rg(addr_t rg_start, addr_t rg_end)
 {
@@ -499,19 +514,31 @@ int print_list_pgn(struct pgn_t *ip)
 
 
 
+
 int print_pgtbl(struct pcb_t *caller, addr_t start, addr_t end)
 {
-  if (caller == NULL || caller->krnl == NULL)
+  if (caller == NULL)
+    return -1;
+
+  struct mm_struct *mm = NULL;
+
+  if (caller->mm != NULL)
+    mm = caller->mm;
+  else if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+
+  if (mm == NULL)
     return -1;
 
   printf("print_pgtbl:\n PDG=%016lx P4g=%016lx PUD=%016lx PMD=%016lx\n",
-         (unsigned long)caller->krnl->krnl_pgd,
-         (unsigned long)caller->krnl->krnl_p4d,
-         (unsigned long)caller->krnl->krnl_pud,
-         (unsigned long)caller->krnl->krnl_pmd);
+         (unsigned long)mm->pgd,
+         (unsigned long)mm->p4d,
+         (unsigned long)mm->pud,
+         (unsigned long)mm->pmd);
 
   return 0;
 }
+
 
 
 
