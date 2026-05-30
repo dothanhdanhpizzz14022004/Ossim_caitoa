@@ -146,8 +146,22 @@ static void * ld_routine(void * args) {
 			next_slot(timer_id);
 		}
 #ifdef MM_PAGING
-		krnl->mm = malloc(sizeof(struct mm_struct));
-		init_mm(krnl->mm, proc);
+		proc->mm = malloc(sizeof(struct mm_struct));
+		init_mm(proc->mm, proc);
+
+		if (proc->mm->mmap == NULL) {
+			struct vm_area_struct *vma0 = malloc(sizeof(struct vm_area_struct));
+			vma0->vm_id = 0;
+			vma0->vm_start = 0;
+			vma0->vm_end = 0;
+			vma0->sbrk = 0;
+			vma0->vm_mm = proc->mm;
+			vma0->vm_freerg_list = NULL;
+			vma0->vm_next = NULL;
+			proc->mm->mmap = vma0;
+		}
+
+		krnl->mm = proc->mm;
 		krnl->mram = mram;
 		krnl->mswp = mswp;
 		krnl->active_mswp = active_mswp;

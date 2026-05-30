@@ -73,13 +73,35 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
   /*Allocate at the toproof */
   pthread_mutex_lock(&mmvm_lock);
   struct vm_rg_struct rgnode;
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  struct mm_struct *mm = NULL;
+
+#ifdef MM_PAGING
+  if (caller->mm != NULL)
+    mm = caller->mm;
+  else if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+#else
+  if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+#endif
+
+  if (mm == NULL) {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
+
+  struct vm_area_struct *cur_vma = get_vma_by_num(mm, vmaid);
+  if (cur_vma == NULL) {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
+
   int inc_sz=0;
 
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
-    caller->krnl->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
-    caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
+    mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
+    mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
  
     *alloc_addr = rgnode.rg_start;
 
@@ -104,19 +126,15 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
   /* TODO INCREASE THE LIMIT
    * SYSCALL 1 sys_memmap
    */
-  struct sc_regs regs;
-  regs.a1 = SYSMEM_INC_OP;
-  regs.a2 = vmaid;
-#ifdef MM64
-  regs.a3 = size;
-#else
-  regs.a3 = PAGING_PAGE_ALIGNSZ(size);
-#endif  
-  _syscall(caller->krnl, caller->pid, 17, &regs); /* SYSCALL 17 sys_memmap */
+  if (inc_vma_limit(caller, vmaid, size) < 0)
+  {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
 
   /*Successful increase limit */
-  caller->krnl->mm->symrgtbl[rgid].rg_start = old_sbrk;
-  caller->krnl->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
+  mm->symrgtbl[rgid].rg_start = old_sbrk;
+  mm->symrgtbl[rgid].rg_end = old_sbrk + size;
 
   *alloc_addr = old_sbrk;
 
@@ -132,62 +150,92 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
  *@size: allocated size
  *
  */
+
 int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
   pthread_mutex_lock(&mmvm_lock);
 
-  if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
+  if (caller == NULL || rgid < 0 || rgid >= PAGING_MAX_SYMTBL_SZ)
   {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
 
-  /* TODO: Manage the collect freed region to freerg_list */
-  struct vm_rg_struct *rgnode = get_symrg_byid(caller->krnl->mm, rgid);
+  struct mm_struct *mm = NULL;
 
-  if (rgnode->rg_start == 0 && rgnode->rg_end == 0)
+#ifdef MM_PAGING
+  if (caller->mm != NULL)
+    mm = caller->mm;
+  else if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+#else
+  if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+#endif
+
+  if (mm == NULL)
   {
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
+
+  struct vm_rg_struct *rgnode = get_symrg_byid(mm, rgid);
+
+  if (rgnode == NULL || (rgnode->rg_start == 0 && rgnode->rg_end == 0))
+  {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
+
   struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
+  if (freerg_node == NULL)
+  {
+    pthread_mutex_unlock(&mmvm_lock);
+    return -1;
+  }
+
   freerg_node->rg_start = rgnode->rg_start;
   freerg_node->rg_end = rgnode->rg_end;
   freerg_node->rg_next = NULL;
 
-  rgnode->rg_start = rgnode->rg_end = 0;
+  rgnode->rg_start = 0;
+  rgnode->rg_end = 0;
   rgnode->rg_next = NULL;
 
-  /*enlist the obsoleted memory region */
-  enlist_vm_freerg_list(caller->krnl->mm, freerg_node);
+  enlist_vm_freerg_list(mm, freerg_node);
 
   pthread_mutex_unlock(&mmvm_lock);
   return 0;
 }
+
 
 /*liballoc - PAGING-based allocate a region memory
  *@proc:  Process executing the instruction
  *@size: allocated size
  *@reg_index: memory region ID (used to identify variable in symbole table)
  */
+
 int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
 {
-  addr_t  addr;
+  addr_t addr;
   int val = __alloc(proc, 0, reg_index, size, &addr);
+
   if (val == -1)
   {
     return -1;
   }
+
+  printf("liballoc:178\n");
+
 #ifdef IODUMP
-  /* TODO dump IO content (if needed) */
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
 #endif
 #endif
 
-  /* By default using vmaid = 0 */
   return val;
 }
+
 
 /*libfree - PAGING-based free a region memory
  *@proc: Process executing the instruction
@@ -195,22 +243,27 @@ int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
  *@reg_index: memory region ID (used to identify variable in symbole table)
  */
 
+
 int libfree(struct pcb_t *proc, uint32_t reg_index)
 {
   int val = __free(proc, 0, reg_index);
+
   if (val == -1)
   {
     return -1;
   }
-printf("%s:%d\n",__func__,__LINE__);
+
+  printf("libfree:218\n");
+
 #ifdef IODUMP
-  /* TODO dump IO content (if needed) */
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
 #endif
 #endif
-  return 0;//val;
+
+  return val;
 }
+
 
 /*pg_getpage - get the page in ram
  *@mm: memory region
@@ -343,26 +396,24 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE *data)
 }
 
 /*libread - PAGING-based read a region memory */
-int libread(
-    struct pcb_t *proc, // Process executing the instruction
-    uint32_t source,    // Index of source register
-    addr_t offset,    // Source address = [source] + [offset]
-    uint32_t* destination)
+
+int libread(struct pcb_t *proc, uint32_t source, addr_t offset, uint32_t *destination)
 {
   BYTE data;
-printf("%s:%d\n",__func__,__LINE__);
   int val = __read(proc, 0, source, offset, &data);
 
+  if (val == -1)
+  {
+    return -1;
+  }
+
   *destination = data;
-#ifdef IODUMP
-  /* TODO dump IO content (if needed) */
-#ifdef PAGETBL_DUMP
-  print_pgtbl(proc, 0, -1); // print max TBL
-#endif
-#endif
+
+  printf("libread:426\n");
 
   return val;
 }
+
 
 /*__write - write a region memory
  *@caller: caller
@@ -392,19 +443,19 @@ int __write(struct pcb_t *caller, int vmaid, int rgid, addr_t offset, BYTE value
 }
 
 /*libwrite - PAGING-based write a region memory */
-int libwrite(
-    struct pcb_t *proc,   // Process executing the instruction
-    BYTE data,            // Data to be wrttien into memory
-    uint32_t destination, // Index of destination register
-    addr_t offset)
+
+int libwrite(struct pcb_t *proc, BYTE data, uint32_t destination, addr_t offset)
 {
   int val = __write(proc, 0, destination, offset, data);
+
   if (val == -1)
   {
     return -1;
   }
+
+  printf("libwrite:502\n");
+
 #ifdef IODUMP
-  /* TODO dump IO content (if needed) */
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
 #endif
@@ -412,6 +463,7 @@ int libwrite(
 
   return val;
 }
+
 
 
 /*libkmem_malloc- alloc region memory in kmem
@@ -669,64 +721,64 @@ int find_victim_page(struct mm_struct *mm, addr_t *retpgn)
  *@size: allocated size
  *
  */
+
 int get_free_vmrg_area(struct pcb_t *caller, int vmaid, int size, struct vm_rg_struct *newrg)
 {
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
+  if (caller == NULL || newrg == NULL)
+    return -1;
+
+  struct mm_struct *mm = NULL;
+
+#ifdef MM_PAGING
+  if (caller->mm != NULL)
+    mm = caller->mm;
+  else if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+#else
+  if (caller->krnl != NULL)
+    mm = caller->krnl->mm;
+#endif
+
+  if (mm == NULL)
+    return -1;
+
+  struct vm_area_struct *cur_vma = get_vma_by_num(mm, vmaid);
+  if (cur_vma == NULL)
+    return -1;
 
   struct vm_rg_struct *rgit = cur_vma->vm_freerg_list;
+  struct vm_rg_struct *prev = NULL;
 
-  if (rgit == NULL)
-    return -1;
-
-  /* Probe unintialized newrg */
-  newrg->rg_start = newrg->rg_end = -1;
-
-  /* Traverse on list of free vm region to find a fit space */
   while (rgit != NULL)
   {
-    if (rgit->rg_start + size <= rgit->rg_end)
-    { /* Current region has enough space */
+    if (rgit->rg_end > rgit->rg_start &&
+        (rgit->rg_end - rgit->rg_start) >= size)
+    {
       newrg->rg_start = rgit->rg_start;
       newrg->rg_end = rgit->rg_start + size;
+      newrg->rg_next = NULL;
 
-      /* Update left space in chosen region */
-      if (rgit->rg_start + size < rgit->rg_end)
+      rgit->rg_start += size;
+
+      if (rgit->rg_start >= rgit->rg_end)
       {
-        rgit->rg_start = rgit->rg_start + size;
-      }
-      else
-      { /*Use up all space, remove current node */
-        /*Clone next rg node */
-        struct vm_rg_struct *nextrg = rgit->rg_next;
-
-        /*Cloning */
-        if (nextrg != NULL)
-        {
-          rgit->rg_start = nextrg->rg_start;
-          rgit->rg_end = nextrg->rg_end;
-
-          rgit->rg_next = nextrg->rg_next;
-
-          free(nextrg);
-        }
+        if (prev == NULL)
+          cur_vma->vm_freerg_list = rgit->rg_next;
         else
-        {                                /*End of free list */
-          rgit->rg_start = rgit->rg_end; // dummy, size 0 region
-          rgit->rg_next = NULL;
-        }
+          prev->rg_next = rgit->rg_next;
+
+        free(rgit);
       }
-      break;
+
+      return 0;
     }
-    else
-    {
-      rgit = rgit->rg_next; // Traverse next rg
-    }
+
+    prev = rgit;
+    rgit = rgit->rg_next;
   }
 
-  if (newrg->rg_start == -1) // new region not found
-    return -1;
-
-  return 0;
+  return -1;
 }
+
 
 // #endif
