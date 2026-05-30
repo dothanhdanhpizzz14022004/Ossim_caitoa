@@ -22,10 +22,9 @@ static struct queue_t running_list;
 #ifdef MLQ_SCHED
 static struct queue_t mlq_ready_queue[MAX_PRIO];
 static int slot[MAX_PRIO];
+static int remaining_slot[MAX_PRIO];
 #endif
 
-static size_t current_prio = 0; //Highest first
-static size_t remaining_slot;
 
 
 int queue_empty(void) {
@@ -45,14 +44,13 @@ void init_scheduler(void) {
 	for (i = 0; i < MAX_PRIO; i ++) {
 		mlq_ready_queue[i].size = 0;
 		slot[i] = MAX_PRIO - i;
+        remaining_slot[i] = slot[i];
 	}
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
 	running_list.size = 0;
 	pthread_mutex_init(&queue_lock, NULL);
-
-    remaining_slot = slot[current_prio];
 }
 
 #ifdef MLQ_SCHED
@@ -70,29 +68,30 @@ struct pcb_t * get_mlq_proc(void) {
 	 *      It worth to protect by a mechanism.
 	 * */
 
-    /* Dev_log: must introduce two new global static varibable,
-       remaining_slot and current_prio. Kind of the only way? */
+    /* Dev_log: must introduce new global static varibable,
+       remaining_slot. Kind of the only way? */
 
-
-    if ( remaining_slot > 0 )
-    {
-        proc = dequeue(&mlq_ready_queue[current_prio]);
-        remaining_slot--;
-        if ( remaining_slot < 0 )
-        { printf("Terrible error in get_mlq_proc"); }
+    for (int i = 0; i < MAX_PRIO; i++) {
+        if ( remaining_slot[i] > 0 )
+        {
+            proc = dequeue(&mlq_ready_queue[i]);
+            if ( proc != NULL )
+            {
+                remaining_slot[i]--;
+                break;
+            }
+            else
+            {
+                continue;
+            }
+        }
 
     }
-    else if ( remaining_slot == 0 )
-    {
-        current_prio++;
-        current_prio = current_prio % 140;
-        remaining_slot = slot[current_prio];
-    }
-
-    pthread_mutex_unlock(&queue_lock);
 
 	if (proc != NULL)
 		enqueue(&running_list, proc);
+    pthread_mutex_unlock(&queue_lock);
+
 	return proc;
 }
 
